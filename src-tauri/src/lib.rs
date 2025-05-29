@@ -1,20 +1,15 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-
-use std::sync::Arc;
-use tauri::{Manager, State, AppHandle, Emitter};
+use crate::db::{AppInfo, Database, DateRange, KeyRankingItem};
 use crate::keyboard::KeyboardHook;
-use crate::db::{Database, KeyRankingItem, AppInfo, DateRange};
+use std::fs;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 mod appinfo;
-mod keyboard;
 mod db;
 mod dialog;
+mod keyboard;
 mod tray;
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 #[tauri::command]
 fn get_monitoring_status(state: State<'_, Arc<KeyboardHook>>) -> bool {
@@ -42,9 +37,10 @@ fn get_key_ranking(
     start_date: Option<i64>,
     end_date: Option<i64>,
     app_id: Option<i64>,
-    limit: Option<i64>
+    limit: Option<i64>,
 ) -> Result<Vec<KeyRankingItem>, String> {
-    db_state.get_key_ranking(start_date, end_date, app_id, limit)
+    db_state
+        .get_key_ranking(start_date, end_date, app_id, limit)
         .map_err(|e| e.to_string())
 }
 
@@ -58,9 +54,10 @@ fn get_total_key_count(
     db_state: State<'_, Arc<Database>>,
     start_date: Option<i64>,
     end_date: Option<i64>,
-    app_id: Option<i64>
+    app_id: Option<i64>,
 ) -> Result<i64, String> {
-    db_state.get_total_key_count(start_date, end_date, app_id)
+    db_state
+        .get_total_key_count(start_date, end_date, app_id)
         .map_err(|e| e.to_string())
 }
 
@@ -69,12 +66,53 @@ fn get_key_stat_date_range(state: State<'_, Arc<Database>>) -> Result<DateRange,
     state.get_date_range().map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn export_database(app: AppHandle, export_path: String) -> Result<(), String> {
+    let db_path = app
+        .path()
+        .resolve("keyfit.db", tauri::path::BaseDirectory::AppData)
+        .map_err(|e| format!("Failed to resolve db path: {e}"))?;
+    fs::copy(&db_path, &export_path).map_err(|e| format!("Failed to export database: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn import_database(app: AppHandle, import_path: String) -> Result<(), String> {
+    let db_path = app
+        .path()
+        .resolve("keyfit.db", tauri::path::BaseDirectory::AppData)
+        .map_err(|e| format!("Failed to resolve db path: {e}"))?;
+    // バックアップ
+    let backup_path = db_path.with_extension(format!(
+        "backup_{}.db",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    ));
+    if db_path.exists() {
+        fs::copy(&db_path, &backup_path)
+            .map_err(|e| format!("Failed to backup current db: {e}"))?;
+    }
+    // インポート
+    fs::copy(&import_path, &db_path).map_err(|e| format!("Failed to import database: {e}"))?;
+    // アプリ再起動後に新しいDBが有効になります
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle, keyboard_hook: tauri::State<Arc<KeyboardHook>>) {
+    keyboard_hook.stop();
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         .setup(|app| {
             // DB・キーフック初期化
-            let db_path = app.path().resolve("keyfit.db", tauri::path::BaseDirectory::AppData)
+            let db_path = app
+                .path()
+                .resolve("keyfit.db", tauri::path::BaseDirectory::AppData)
                 .expect("Failed to get DB path");
             if let Some(parent) = db_path.parent() {
                 std::fs::create_dir_all(parent).expect("Failed to create DB directory");
@@ -109,13 +147,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             get_monitoring_status,
             toggle_monitoring,
             get_key_ranking,
             get_apps,
             get_total_key_count,
-            get_key_stat_date_range
+            get_key_stat_date_range,
+            import_database,
+            export_database,
+            quit_app,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

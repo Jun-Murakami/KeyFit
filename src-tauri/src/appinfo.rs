@@ -2,11 +2,11 @@
 
 #[cfg(target_os = "windows")]
 pub fn get_active_app_info() -> Option<(String, String)> {
-    use windows::Win32::UI::WindowsAndMessaging::*;
-    use windows::Win32::System::Threading::*;
-    use windows::Win32::System::ProcessStatus::*;
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
+    use windows::Win32::System::ProcessStatus::*;
+    use windows::Win32::System::Threading::*;
+    use windows::Win32::UI::WindowsAndMessaging::*;
 
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -15,7 +15,8 @@ pub fn get_active_app_info() -> Option<(String, String)> {
         }
         let mut pid = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        let h_process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid).ok()?;
+        let h_process =
+            OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid).ok()?;
         if h_process.0 == 0 {
             return None;
         }
@@ -35,18 +36,18 @@ pub fn get_active_app_info() -> Option<(String, String)> {
 pub fn get_active_app_info() -> Option<(String, String)> {
     use cocoa::base::{id, nil};
     use cocoa::foundation::NSString;
-    use objc::{msg_send, sel, sel_impl, class};
+    use objc::{class, msg_send, sel, sel_impl};
     use std::ffi::CStr;
 
     unsafe {
         println!("macOS: アクティブアプリ情報取得開始");
-        
+
         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
         if workspace == nil {
             eprintln!("macOS: NSWorkspace取得失敗");
             return None;
         }
-        
+
         let active_app: id = msg_send![workspace, frontmostApplication];
         if active_app == nil {
             eprintln!("macOS: frontmostApplication取得失敗");
@@ -66,17 +67,17 @@ pub fn get_active_app_info() -> Option<(String, String)> {
         }
 
         let name = match CStr::from_ptr(name_ptr).to_string_lossy() {
-            name_cow => name_cow.into_owned()
+            name_cow => name_cow.into_owned(),
         };
-        
+
         println!("macOS: アプリ名取得成功: {}", name);
-        
+
         let bundle_url: id = msg_send![active_app, bundleURL];
         let path = if bundle_url != nil {
             let path_ptr: *const i8 = msg_send![bundle_url, fileSystemRepresentation];
             if !path_ptr.is_null() {
                 match CStr::from_ptr(path_ptr).to_string_lossy() {
-                    path_cow => path_cow.into_owned()
+                    path_cow => path_cow.into_owned(),
                 }
             } else {
                 println!("macOS: bundleURL fileSystemRepresentation取得失敗");
@@ -95,4 +96,4 @@ pub fn get_active_app_info() -> Option<(String, String)> {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn get_active_app_info() -> Option<(String, String)> {
     None
-} 
+}

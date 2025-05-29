@@ -19,30 +19,38 @@ import {
   Toolbar,
   IconButton,
   useMediaQuery,
+  Menu,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { BarChart } from '@mui/x-charts/BarChart';
-import { Brightness4, Brightness7 } from '@mui/icons-material';
+import {
+  Brightness4,
+  Brightness7,
+  Refresh,
+  Storage,
+  ExitToApp,
+} from '@mui/icons-material';
 import { invoke } from '@tauri-apps/api/core';
 import { setTheme } from '@tauri-apps/api/app';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import 'dayjs/locale/ja';
 import { listen } from '@tauri-apps/api/event';
 import '@fontsource-variable/noto-sans-jp';
 import '@fontsource/lato';
+import {
+  jpLayout,
+  usLayout,
+  type KeyDef,
+  formatKeyCode,
+} from './lib/keyboardLayout';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import { load, type Store } from '@tauri-apps/plugin-store';
 
 dayjs.locale('ja');
-
-type KeyDef = {
-  code: string;
-  label: string;
-  xOffset?: number;
-  width?: number;
-  height?: number;
-};
 
 interface KeyRankingItem {
   key_code: string;
@@ -71,135 +79,6 @@ const presets = [
   { label: '1 Week', getRange: () => [dayjs().subtract(1, 'week'), dayjs()] },
 ];
 
-const jp109Layout: KeyDef[][] = [
-  [
-    { code: 'Escape', label: 'Esc' },
-    { code: 'F1', label: 'F1', xOffset: 1 },
-    { code: 'F2', label: 'F2' },
-    { code: 'F3', label: 'F3' },
-    { code: 'F4', label: 'F4' },
-    { code: 'F5', label: 'F5', xOffset: 0.33 },
-    { code: 'F6', label: 'F6' },
-    { code: 'F7', label: 'F7' },
-    { code: 'F8', label: 'F8' },
-    { code: 'F9', label: 'F9', xOffset: 0.33 },
-    { code: 'F10', label: 'F10' },
-    { code: 'F11', label: 'F11' },
-    { code: 'F12', label: 'F12' },
-    { code: 'PrintScreen', label: 'PrtSc', xOffset: 0.54 },
-    { code: 'ScrollLock', label: 'Scroll' },
-    { code: 'Pause', label: 'Pause' },
-  ],
-  [
-    { code: 'Unknown(244)', label: '半角/全角' },
-    { code: 'Num1', label: '1' },
-    { code: 'Num2', label: '2' },
-    { code: 'Num3', label: '3' },
-    { code: 'Num4', label: '4' },
-    { code: 'Num5', label: '5' },
-    { code: 'Num6', label: '6' },
-    { code: 'Num7', label: '7' },
-    { code: 'Num8', label: '8' },
-    { code: 'Num9', label: '9' },
-    { code: 'Num0', label: '0' },
-    { code: 'Minus', label: '-' },
-    { code: 'Quote', label: '^' },
-    { code: 'BackSlash', label: '¥' },
-    { code: 'Backspace', label: 'BackSpace' },
-    { code: 'Insert', label: 'Insert', xOffset: 0.2 },
-    { code: 'Home', label: 'Home' },
-    { code: 'PageUp', label: 'PageUp' },
-    { code: 'NumLock', label: 'NumLock', xOffset: 0.2 },
-    { code: 'KpDivide', label: '/' },
-    { code: 'KpMultiply', label: '*' },
-    { code: 'KpMinus', label: '-' },
-  ],
-  [
-    { code: 'Tab', label: 'Tab', width: 1.5 },
-    { code: 'KeyQ', label: 'Q', xOffset: 0.5 },
-    { code: 'KeyW', label: 'W' },
-    { code: 'KeyE', label: 'E' },
-    { code: 'KeyR', label: 'R' },
-    { code: 'KeyT', label: 'T' },
-    { code: 'KeyY', label: 'Y' },
-    { code: 'KeyU', label: 'U' },
-    { code: 'KeyI', label: 'I' },
-    { code: 'KeyO', label: 'O' },
-    { code: 'KeyP', label: 'P' },
-    { code: 'BackQuote', label: '@' },
-    { code: 'LeftBracket', label: '[' },
-    { code: 'Return', label: 'Enter', width: 1.5 },
-    { code: 'Delete', label: 'Delete', xOffset: 0.7 },
-    { code: 'End', label: 'End' },
-    { code: 'PageDown', label: 'PageDown' },
-    { code: 'Kp7', label: '7', xOffset: 0.2 },
-    { code: 'Kp8', label: '8' },
-    { code: 'Kp9', label: '9' },
-    { code: 'KpPlus', label: '+', height: 2 },
-  ],
-  [
-    { code: 'CapsLock', label: 'Caps', width: 1.7 },
-    { code: 'KeyA', label: 'A', xOffset: 0.7 },
-    { code: 'KeyS', label: 'S' },
-    { code: 'KeyD', label: 'D' },
-    { code: 'KeyF', label: 'F' },
-    { code: 'KeyG', label: 'G' },
-    { code: 'KeyH', label: 'H' },
-    { code: 'KeyJ', label: 'J' },
-    { code: 'KeyK', label: 'K' },
-    { code: 'KeyL', label: 'L' },
-    { code: 'Equal', label: ';' },
-    { code: 'Semicolon', label: ':' },
-    { code: 'RightBracket', label: ']' },
-    { code: '', label: '' },
-    { code: '', label: '' },
-    { code: '', label: '' },
-    { code: 'Kp4', label: '4', xOffset: 1.7 },
-    { code: 'Kp5', label: '5' },
-    { code: 'Kp6', label: '6' },
-  ],
-  [
-    { code: 'ShiftLeft', label: 'Shift', width: 2 },
-    { code: 'KeyZ', label: 'Z', xOffset: 1 },
-    { code: 'KeyX', label: 'X' },
-    { code: 'KeyC', label: 'C' },
-    { code: 'KeyV', label: 'V' },
-    { code: 'KeyB', label: 'B' },
-    { code: 'KeyN', label: 'N' },
-    { code: 'KeyM', label: 'M' },
-    { code: 'Comma', label: ',' },
-    { code: 'Dot', label: '.' },
-    { code: 'Slash', label: '/' },
-    { code: 'IntlBackslash', label: '\\' },
-    { code: 'ShiftRight', label: 'Shift', width: 2 },
-    { code: '', label: '' },
-    { code: 'UpArrow', label: '↑', xOffset: 1.2 },
-    { code: '', label: '' },
-    { code: 'Kp1', label: '1', xOffset: 0.2 },
-    { code: 'Kp2', label: '2' },
-    { code: 'Kp3', label: '3' },
-    { code: 'Return', label: 'Enter', height: 2 },
-  ],
-  [
-    { code: 'ControlLeft', label: 'Ctrl', width: 1.7 },
-    { code: 'MetaLeft', label: 'Win/Opt', xOffset: 0.7 },
-    { code: 'Alt', label: 'Alt/Cmd' },
-    { code: 'Lang1', label: '無変換' },
-    { code: 'Space', label: 'Space', width: 3 },
-    { code: 'Lang2', label: '変換', xOffset: 2 },
-    { code: 'KanaMode', label: 'カナ/かな' },
-    { code: 'AltGr', label: 'Alt/Cmd' },
-    { code: 'MetaRight', label: 'Win/Opt' },
-    { code: 'Apps', label: 'Menu' },
-    { code: 'ControlRight', label: 'Ctrl', width: 2.3 },
-    { code: 'LeftArrow', label: '←', xOffset: 1.5 },
-    { code: 'DownArrow', label: '↓' },
-    { code: 'RightArrow', label: '→' },
-    { code: 'Kp0', label: '0', width: 2, xOffset: 0.2 },
-    { code: 'KpDecimal', label: '.', xOffset: 1 },
-  ],
-];
-
 function App() {
   const [darkMode, setDarkMode] = useState(
     useMediaQuery('(prefers-color-scheme: dark)'),
@@ -215,10 +94,17 @@ function App() {
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   const [preset, setPreset] = useState<string>('All');
   const [allAppsTotal, setAllAppsTotal] = useState<number>(0);
+  const [store, setStore] = useState<Store | null>(null);
+  const [selectedLayout, setSelectedLayout] = useState<KeyDef[][]>(jpLayout);
+  const [selectedLayoutName, setSelectedLayoutName] = useState<string>('JP');
+  const [dbMenuAnchor, setDbMenuAnchor] = useState<null | HTMLElement>(null);
 
   const theme = createTheme({
     palette: {
       mode: darkMode ? 'dark' : 'light',
+      primary: {
+        main: '#34a3dd',
+      },
     },
     typography: {
       fontFamily:
@@ -298,80 +184,12 @@ function App() {
   const toggleMonitoring = async () => {
     try {
       await invoke('toggle_monitoring');
+      // 状態を明示的に再取得
+      const status = await invoke<boolean>('get_monitoring_status');
+      setIsMonitoring(status);
     } catch (error) {
       console.error('Failed to toggle monitoring:', error);
     }
-  };
-
-  const formatKeyCode = (keyCode: string) => {
-    // rdevのキーコードを日本語表示に変換
-    const keyMap: { [key: string]: string } = {
-      KeyA: 'A',
-      KeyB: 'B',
-      KeyC: 'C',
-      KeyD: 'D',
-      KeyE: 'E',
-      KeyF: 'F',
-      KeyG: 'G',
-      KeyH: 'H',
-      KeyI: 'I',
-      KeyJ: 'J',
-      KeyK: 'K',
-      KeyL: 'L',
-      KeyM: 'M',
-      KeyN: 'N',
-      KeyO: 'O',
-      KeyP: 'P',
-      KeyQ: 'Q',
-      KeyR: 'R',
-      KeyS: 'S',
-      KeyT: 'T',
-      KeyU: 'U',
-      KeyV: 'V',
-      KeyW: 'W',
-      KeyX: 'X',
-      KeyY: 'Y',
-      KeyZ: 'Z',
-      Backspace: 'BackSpace',
-      Space: 'Space',
-      Return: 'Enter',
-      Tab: 'Tab',
-      Escape: 'Esc',
-      LeftShift: 'L-Shift',
-      RightShift: 'R-Shift',
-      LeftCtrl: 'L-Ctrl',
-      RightCtrl: 'R-Ctrl',
-      LeftAlt: 'L-Alt',
-      RightAlt: 'R-Alt',
-      'Unknown(244)': '半角/全角',
-      KpDivide: 'KeyPad /',
-      KpMultiply: 'KeyPad *',
-      KpMinus: 'KeyPad -',
-      KpPlus: 'KeyPad +',
-      KpDecimal: 'KeyPad .',
-      KpEqual: 'KeyPad =',
-      Kp0: 'KeyPad 0',
-      Kp1: 'KeyPad 1',
-      Kp2: 'KeyPad 2',
-      Kp3: 'KeyPad 3',
-      Kp4: 'KeyPad 4',
-      Kp5: 'KeyPad 5',
-      Kp6: 'KeyPad 6',
-      Kp7: 'KeyPad 7',
-      Kp8: 'KeyPad 8',
-      Kp9: 'KeyPad 9',
-      Num0: 'Num 0',
-      Num1: 'Num 1',
-      Num2: 'Num 2',
-      Num3: 'Num 3',
-      Num4: 'Num 4',
-      Num5: 'Num 5',
-      Num6: 'Num 6',
-      Num7: 'Num 7',
-      Num8: 'Num 8',
-      Num9: 'Num 9',
-    };
-    return keyMap[keyCode] || keyCode;
   };
 
   const chartData = keyRanking.map((item, index) => {
@@ -426,8 +244,10 @@ function App() {
     });
     return maxX;
   };
-  const svgWidth = Math.max(...jp109Layout.map(getRowWidth)) + svgPadding * 2;
-  const svgHeight = jp109Layout.length * (keyHeight + keyGap) + svgPadding * 2;
+  const svgWidth =
+    Math.max(...selectedLayout.map(getRowWidth)) + svgPadding * 2;
+  const svgHeight =
+    selectedLayout.length * (keyHeight + keyGap) + svgPadding * 2;
 
   const counts = Object.values(keyCountMap);
   let minCount = 0;
@@ -458,6 +278,54 @@ function App() {
       });
     }
   }, [preset, fetchDateRange]);
+
+  const handleExport = async () => {
+    setDbMenuAnchor(null);
+    const now = dayjs().format('YYYYMMDD_HHmmss');
+    const filePath = await save({
+      title: 'Select location to export database',
+      filters: [{ name: 'Database', extensions: ['db'] }],
+      defaultPath: `keyfit_backup_${now}.db`,
+    });
+    if (filePath) {
+      try {
+        await invoke('export_database', { exportPath: filePath });
+        alert('Export successful.');
+      } catch (e) {
+        alert(`Export failed: ${e}`);
+      }
+    }
+  };
+
+  const handleImport = async () => {
+    setDbMenuAnchor(null);
+    const filePath = await open({
+      title: 'Select a database file to import',
+      filters: [{ name: 'Database', extensions: ['db'] }],
+      multiple: false,
+    });
+    if (filePath) {
+      try {
+        await invoke('import_database', { importPath: filePath });
+        alert(
+          'Import successful. Please restart the application to apply the new database.',
+        );
+      } catch (e) {
+        alert(`Import failed: ${e}`);
+      }
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const loadedStore = await load('store.json', { autoSave: false });
+      setStore(loadedStore);
+      const layout = await loadedStore.get<{ value: string }>('keyLayout');
+      const layoutValue = layout?.value || 'JP';
+      setSelectedLayout(layoutValue === 'US' ? usLayout : jpLayout);
+      setSelectedLayoutName(layoutValue);
+    })();
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
@@ -496,14 +364,52 @@ function App() {
               onClick={async () => {
                 setDarkMode(!darkMode);
                 await setTheme(darkMode ? 'dark' : 'light');
+                await getCurrentWindow().setTheme(darkMode ? 'dark' : 'light');
               }}
             >
               {darkMode ? <Brightness7 /> : <Brightness4 />}
             </IconButton>
+            <IconButton
+              color="inherit"
+              onClick={async () => {
+                await loadApps();
+                await loadData();
+              }}
+              sx={{ ml: 1 }}
+              title="Refresh"
+            >
+              <Refresh />
+            </IconButton>
+            <IconButton
+              color="inherit"
+              onClick={(e) => setDbMenuAnchor(e.currentTarget)}
+              sx={{ ml: 1 }}
+              title="Database Import/Export"
+            >
+              <Storage />
+            </IconButton>
+            <Menu
+              anchorEl={dbMenuAnchor}
+              open={Boolean(dbMenuAnchor)}
+              onClose={() => setDbMenuAnchor(null)}
+            >
+              <MenuItem onClick={handleImport}>Import Log</MenuItem>
+              <MenuItem onClick={handleExport}>Export Log</MenuItem>
+            </Menu>
+            <IconButton
+              color="inherit"
+              onClick={() => {
+                invoke('quit_app');
+              }}
+              sx={{ ml: 1 }}
+              title="Quit"
+            >
+              <ExitToApp />
+            </IconButton>
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
+        <Container maxWidth="xl" sx={{ mt: 3, mb: 1 }}>
           <Grid container spacing={2}>
             {/* 上段：横並び2つ */}
             <Grid size={{ xs: 12, md: 6 }}>
@@ -643,6 +549,7 @@ function App() {
                     {chartData.length > 0 && (
                       <BarChart
                         dataset={chartData}
+                        colors={['#34a3dd']}
                         yAxis={[{ scaleType: 'band', dataKey: 'key' }]}
                         series={[{ dataKey: 'count' }]}
                         layout="horizontal"
@@ -671,13 +578,41 @@ function App() {
             <Grid size={{ xs: 12 }}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Heatmap (JP)
-                  </Typography>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid size={{ xs: 10 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Heatmap
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 2 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Keyboard Layout</InputLabel>
+                        <Select
+                          value={selectedLayoutName}
+                          label="KeyboardLayout"
+                          onChange={async (e) => {
+                            if (!store) return;
+                            if (e.target.value === 'JP') {
+                              setSelectedLayout(jpLayout);
+                              setSelectedLayoutName('JP');
+                              await store.set('keyLayout', { value: 'JP' });
+                            } else {
+                              setSelectedLayout(usLayout);
+                              setSelectedLayoutName('US');
+                              await store.set('keyLayout', { value: 'US' });
+                            }
+                          }}
+                        >
+                          <MenuItem value="JP">JP</MenuItem>
+                          <MenuItem value="US">US</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                   <Box sx={{ overflowX: 'auto', width: '100%' }}>
                     <svg width={svgWidth} height={svgHeight}>
                       <title>Key Heatmap</title>
-                      {jp109Layout.map((row, rowIdx) => {
+                      {selectedLayout.map((row, rowIdx) => {
                         let offset = 0;
                         return row.map((key, colIdx) => {
                           if (!key.code) return null;

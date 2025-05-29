@@ -1,14 +1,14 @@
+use super::appinfo::get_active_app_info;
+use crate::dialog;
 use anyhow::Result;
+use chrono::Local;
 use rdev::{Event, EventType};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
-use chrono::Local;
-use super::appinfo::get_active_app_info;
-use crate::dialog;
-use tauri::AppHandle;
 use std::thread::JoinHandle;
+use std::time::Duration;
+use tauri::AppHandle;
 
 #[derive(Clone)]
 pub struct KeyStat {
@@ -38,11 +38,11 @@ impl KeyboardHook {
     }
 
     pub fn start(&self, app: &AppHandle) -> Result<()> {
-        if self.running.load(Ordering::SeqCst) {
-            println!("Keyboard hook is already running");
+        // すでにスレッドが存在する場合は何もしない（runningフラグだけON）
+        if self.worker.lock().unwrap().is_some() {
+            self.running.store(true, Ordering::SeqCst);
             return Ok(());
         }
-        self.stop();
         // macOS accessibility permission check
         #[cfg(target_os = "macos")]
         {
@@ -92,17 +92,33 @@ impl KeyboardHook {
                 }
                 if let EventType::KeyRelease(key) = event.event_type {
                     let now = Local::now().date_naive();
-                    let ts_day = now.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Local).unwrap().timestamp();
+                    let ts_day = now
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap()
+                        .and_local_timezone(Local)
+                        .unwrap()
+                        .timestamp();
                     let key_code = format!("{:?}", key);
                     if let Some((app_name, bundle_id)) = get_active_app_info() {
                         match db_key.get_or_create_app(&app_name, &bundle_id) {
                             Ok(app_id) => {
                                 let mut buf = buffer_key.lock().unwrap();
-                                buf.push(KeyStat { ts_day, key_code: key_code.clone(), app_id });
-                                println!("KeyStat: {:?} app_id: {} bundle_id: {}", key_code, app_id, bundle_id);
+                                buf.push(KeyStat {
+                                    ts_day,
+                                    key_code: key_code.clone(),
+                                    app_id,
+                                });
+                                println!(
+                                    "KeyStat: {:?} app_id: {} bundle_id: {}",
+                                    key_code, app_id, bundle_id
+                                );
                             }
                             Err(e) => {
-                                dialog::show_error(&app_handle_key, &format!("Failed to get/create app: {}", e), Some("KeyFit Error"));
+                                dialog::show_error(
+                                    &app_handle_key,
+                                    &format!("Failed to get/create app: {}", e),
+                                    Some("KeyFit Error"),
+                                );
                             }
                         }
                     }
@@ -122,7 +138,7 @@ impl KeyboardHook {
         self.running.store(false, Ordering::SeqCst);
         self.flush();
         // workerスレッドはjoinしない（rdev::listenは抜けないため）
-        let _ = self.worker.lock().unwrap().take();
+        // スレッドは生かしたまま
         if let Some(flush_handle) = self.flush_worker.lock().unwrap().take() {
             let _ = flush_handle.join();
         }
@@ -132,11 +148,11 @@ impl KeyboardHook {
         self.running.load(Ordering::SeqCst)
     }
 
-    pub fn toggle(&self, app: &AppHandle) -> bool {
+    pub fn toggle(&self, _app: &AppHandle) -> bool {
         if self.is_running() {
             self.stop();
         } else {
-            let _ = self.start(app);
+            self.running.store(true, Ordering::SeqCst);
         }
         self.is_running()
     }
@@ -225,14 +241,14 @@ mod tests {
     #[test]
     fn test_keyboard_hook_start_stop() {
         let (hook, _temp_file) = setup_test_hook();
-        
+
         // 初期状態は停止中
         assert!(!hook.running.load(Ordering::SeqCst));
-        
+
         // 開始
         // hook.start().unwrap();
         assert!(hook.running.load(Ordering::SeqCst));
-        
+
         // 停止
         hook.stop();
         assert!(!hook.running.load(Ordering::SeqCst));
@@ -241,13 +257,13 @@ mod tests {
     #[test]
     fn test_keyboard_hook_double_start() {
         let (hook, _temp_file) = setup_test_hook();
-        
+
         // 1回目の開始
         //hook.start().unwrap();
         assert!(hook.running.load(Ordering::SeqCst));
-        
+
         // 2回目の開始（エラーにならないことを確認）
-       // hook.start().unwrap();
+        // hook.start().unwrap();
         assert!(hook.running.load(Ordering::SeqCst));
     }
-} 
+}

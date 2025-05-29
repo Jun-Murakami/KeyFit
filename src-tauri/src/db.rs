@@ -1,9 +1,9 @@
+use crate::keyboard::KeyStat;
 use anyhow::Result;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
-use crate::keyboard::KeyStat;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeyRankingItem {
@@ -39,7 +39,9 @@ impl Database {
     #[allow(dead_code)]
     pub fn new(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        let db = Database { conn: Mutex::new(conn) };
+        let db = Database {
+            conn: Mutex::new(conn),
+        };
         db.init()?;
         Ok(db)
     }
@@ -81,17 +83,20 @@ impl Database {
 
     pub fn get_or_create_app(&self, name: &str, bundle_id: &str) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
-        let app_id: i64 = conn.query_row(
-            "SELECT id FROM app WHERE bundle_id = ?1",
-            params![bundle_id],
-            |row| row.get(0),
-        ).unwrap_or_else(|_| {
-            conn.execute(
-                "INSERT INTO app (name, bundle_id) VALUES (?1, ?2)",
-                params![name, bundle_id],
-            ).unwrap();
-            conn.last_insert_rowid()
-        });
+        let app_id: i64 = conn
+            .query_row(
+                "SELECT id FROM app WHERE bundle_id = ?1",
+                params![bundle_id],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| {
+                conn.execute(
+                    "INSERT INTO app (name, bundle_id) VALUES (?1, ?2)",
+                    params![name, bundle_id],
+                )
+                .unwrap();
+                conn.last_insert_rowid()
+            });
         Ok(app_id)
     }
 
@@ -111,7 +116,13 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_key_ranking(&self, start_date: Option<i64>, end_date: Option<i64>, app_id: Option<i64>, limit: Option<i64>) -> Result<Vec<KeyRankingItem>> {
+    pub fn get_key_ranking(
+        &self,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        app_id: Option<i64>,
+        limit: Option<i64>,
+    ) -> Result<Vec<KeyRankingItem>> {
         let conn = self.conn.lock().unwrap();
         let mut query = "SELECT key_code, SUM(count) as total_count FROM key_stat".to_string();
         let mut conditions = Vec::new();
@@ -135,14 +146,17 @@ impl Database {
         }
 
         query.push_str(" GROUP BY key_code ORDER BY total_count DESC");
-        
+
         if let Some(lim) = limit {
             query.push_str(&format!(" LIMIT {}", lim));
         }
 
         let mut stmt = conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(KeyRankingItem {
                 key_code: row.get(0)?,
@@ -176,9 +190,15 @@ impl Database {
     }
 
     #[allow(dead_code)]
-    pub fn get_key_stats_by_day(&self, start_date: Option<i64>, end_date: Option<i64>, app_id: Option<i64>) -> Result<Vec<KeyStatsByDay>> {
+    pub fn get_key_stats_by_day(
+        &self,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        app_id: Option<i64>,
+    ) -> Result<Vec<KeyStatsByDay>> {
         let conn = self.conn.lock().unwrap();
-        let mut query = "SELECT ts_day, key_code, SUM(count) as total_count FROM key_stat".to_string();
+        let mut query =
+            "SELECT ts_day, key_code, SUM(count) as total_count FROM key_stat".to_string();
         let mut conditions = Vec::new();
         let mut params_vec = Vec::new();
 
@@ -202,8 +222,11 @@ impl Database {
         query.push_str(" GROUP BY ts_day, key_code ORDER BY ts_day, total_count DESC");
 
         let mut stmt = conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(KeyStatsByDay {
                 ts_day: row.get(0)?,
@@ -219,7 +242,12 @@ impl Database {
         Ok(stats)
     }
 
-    pub fn get_total_key_count(&self, start_date: Option<i64>, end_date: Option<i64>, app_id: Option<i64>) -> Result<i64> {
+    pub fn get_total_key_count(
+        &self,
+        start_date: Option<i64>,
+        end_date: Option<i64>,
+        app_id: Option<i64>,
+    ) -> Result<i64> {
         let conn = self.conn.lock().unwrap();
         let mut query = "SELECT SUM(count) FROM key_stat".to_string();
         let mut conditions = Vec::new();
@@ -243,8 +271,11 @@ impl Database {
         }
 
         let mut stmt = conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+
         let total: Option<i64> = stmt.query_row(params_refs.as_slice(), |row| row.get(0))?;
         Ok(total.unwrap_or(0))
     }
@@ -252,16 +283,14 @@ impl Database {
     pub fn get_date_range(&self) -> Result<DateRange> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT MIN(ts_day), MAX(ts_day) FROM key_stat")?;
-        let (min, max): (Option<i64>, Option<i64>) = stmt.query_row([], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?;
+        let (min, max): (Option<i64>, Option<i64>) =
+            stmt.query_row([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(DateRange {
             min: min.unwrap_or(0),
             max: max.unwrap_or(0),
         })
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -281,14 +310,20 @@ mod tests {
         let key_code = "KeyA";
         let now = chrono::Utc::now().date_naive();
         let ts_day = now.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
-        let key_stat = KeyStat { ts_day, key_code: key_code.to_string(), app_id };
+        let key_stat = KeyStat {
+            ts_day,
+            key_code: key_code.to_string(),
+            app_id,
+        };
         db.batch_insert_key_stats(&[key_stat]).unwrap();
         let conn = db.conn.lock().unwrap();
-        let count: i32 = conn.query_row(
-            "SELECT count FROM key_stat WHERE ts_day = ?1 AND key_code = ?2 AND app_id = ?3",
-            params![ts_day, key_code, app_id],
-            |row| row.get(0),
-        ).unwrap();
+        let count: i32 = conn
+            .query_row(
+                "SELECT count FROM key_stat WHERE ts_day = ?1 AND key_code = ?2 AND app_id = ?3",
+                params![ts_day, key_code, app_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(count, 1);
     }
-} 
+}

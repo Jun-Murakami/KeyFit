@@ -1,7 +1,11 @@
-use tauri::{AppHandle, Manager, menu::{Menu, MenuItem}, tray::{TrayIconBuilder, TrayIcon}, Emitter, Wry};
-use std::sync::Arc;
 use crate::keyboard::KeyboardHook;
+use std::sync::Arc;
 use std::sync::Mutex;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{TrayIcon, TrayIconBuilder},
+    AppHandle, Emitter, Manager, Wry,
+};
 
 pub static TRAY_ICON: Mutex<Option<TrayIcon>> = Mutex::new(None);
 
@@ -64,4 +68,4 @@ pub fn init_tray(app: &AppHandle, keyboard_hook: Arc<KeyboardHook>) -> tauri::Re
         .build(app)?;
     TRAY_ICON.lock().unwrap().replace(tray);
     Ok(())
-} 
+}
