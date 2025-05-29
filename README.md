@@ -1,3 +1,5 @@
+![image](https://github.com/user-attachments/assets/8782dbd9-36d2-4dd7-a3ea-a10c38651774)
+
 # KeyFit – Keyboard Usage Analytics Desktop App
 
 KeyFit is a privacy-first desktop application that visualizes your real-world typing data, helping you discover your optimal keyboard form factor (45%/60%/75%/TKL, etc.). Designed for programmers, writers, students, and keyboard enthusiasts, KeyFit provides actionable insights into your typing habits—all while keeping your data 100% local.
