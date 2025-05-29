@@ -18,7 +18,6 @@ KeyFit is a privacy-first desktop application that visualizes your real-world ty
 - All data is stored locally—nothing is ever sent externally.
 - Data is aggregated by hour, making it impossible to reconstruct individual typed strings.
 - No encryption is applied, but privacy is ensured by design.
-- Windows builds are code-signed; macOS builds are notarized.
 
 ## Technology Stack
 
